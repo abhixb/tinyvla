@@ -253,13 +253,7 @@ Uses only existing tokens: digits 0-9 and spaces. Zero vocabulary modifications.
 
 ### Vision-Language Backbone
 
-**Base Model: Qwen2.5-VL-3B-Instruct**
-
-The paper uses Qwen2.5-VL-3B for several reasons:
-- 3.9B parameters (efficient, fast training/inference)
-- State-of-the-art performance for model size
-- Open weights (reproducible)
-- Native multi-image support
+**Base Model: Qwen2.5-VL-3B**
 
 **Architecture Components**
 - **Vision Encoder**: Vision Transformer (ViT) extracts visual features
