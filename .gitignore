@@ -75,3 +75,10 @@ Thumbs.db
 # Environment variables (if you have any sensitive config)
 .env
 .env.local
+
+# Reference implementations (not part of this repo)
+vla0/
+archive/
+
+# HuggingFace cache
+.cache/
