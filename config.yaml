@@ -1,15 +1,25 @@
-# TinyVLA Training Config
-# Usage: python tinyvla.py --config config.yaml
+# config_single_task.yaml
+# Train and eval on SINGLE task from LIBERO-10
 
 # === Model ===
 model_id: "Qwen/Qwen2.5-VL-3B-Instruct"
 use_flash_attention: true
 
+# === LoRA ===
+use_lora: true
+lora_r: 32
+lora_alpha: 64
+lora_dropout: 0.05
+lora_target_modules: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+
 # === Data ===
 repo_id: "physical-intelligence/libero"
+train_suite: "libero_10"
+train_task_id: 0              # ← ADD THIS LINE (0-9 for libero_10)
+# max_episodes: 50            # Optional: limit episodes further
 history: 1
 horizon: 8
-img_size: 224
+img_size: 196
 crop_ratio: 0.875
 tile_images: true
 
@@ -20,20 +30,30 @@ saturation_aug: 0.2
 hue_aug: 0.05
 action_mask_aug_pct: 0.4
 
-# === Training (SFTConfig from TRL) ===
-output_dir: "./runs/vla0"
-num_train_epochs: 32
-per_device_train_batch_size: 8
-gradient_accumulation_steps: 1
-learning_rate: 4.0e-5
-lr_scheduler_type: "constant"
-weight_decay: 1.0e-10
-max_grad_norm: 0.0
-warmup_steps: 0
-logging_steps: 10
-save_steps: 10000
-save_total_limit: 5
+# === Training ===
+output_dir: "./runs/vla0_task0"
+num_train_epochs: 10
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 2.0e-5
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.03
+weight_decay: 0.01
+max_grad_norm: 1.0
+logging_steps: 5
+save_steps: 100
+save_total_limit: 3
 bf16: true
-dataloader_num_workers: 8
+dataloader_num_workers: 4
+remove_unused_columns: false
 report_to: ["wandb"]
+run_name: "vla0-task0"
 seed: 42
+
+# === Evaluation ===
+eval_after_train: true
+eval_suite: "libero_10"
+# eval_task_id: 0             # Optional: auto-set to match train_task_id
+eval_n_episodes: 50
+eval_action_horizon: 8

@@ -17,9 +17,15 @@ Usage:
     # Train with config file
     python tinyvla.py --config config.yaml
 
+    # Train single task
+    python tinyvla.py --config config.yaml --train_task_id 0
+
     # Evaluate
     uv pip install -e ".[eval]"
     python tinyvla.py --eval runs/vla0/final --suite libero_spatial
+    
+    # Evaluate single task
+    python tinyvla.py --eval runs/vla0/final --suite libero_10 --task_id 0
 
 References:
     - VLA-0: https://arxiv.org/abs/2510.13054
@@ -81,6 +87,7 @@ class LiberoDataset(Dataset):
         self,
         repo_id: str = "physical-intelligence/libero",
         train_suite: Optional[str] = None,
+        train_task_id: Optional[int] = None,
         max_episodes: Optional[int] = None,
         history: int = 1,
         horizon: int = 8,
@@ -135,6 +142,19 @@ class LiberoDataset(Dataset):
 
             ts = benchmark_dict[train_suite]()
             suite_task_prompts = [t.language for t in ts.tasks]
+            
+            # SINGLE TASK FILTERING
+            if train_task_id is not None:
+                if not (0 <= train_task_id < len(suite_task_prompts)):
+                    raise ValueError(f"train_task_id={train_task_id} out of range [0, {len(suite_task_prompts)-1}]")
+                selected_task = suite_task_prompts[train_task_id]
+                print(f"\n{'='*60}")
+                print(f"SINGLE TASK TRAINING MODE")
+                print(f"Task ID: {train_task_id}")
+                print(f"Task: {selected_task}")
+                print(f"{'='*60}\n")
+                suite_task_prompts = [selected_task]
+            
             suite_task_indices = {meta.get_task_index(prompt) for prompt in suite_task_prompts}
             suite_task_indices.discard(None)
 
@@ -363,9 +383,10 @@ class QwenVLActor:
 # =============================================================================
 
 
-def evaluate(model_path: str, suite: str = "libero_spatial", n_episodes: int = 50,
-             stats_path: Optional[str] = None, horizon: int = 8, action_horizon: int = 8,
-             img_size: int = 224, crop_ratio: float = 0.875, tile_images: bool = True):
+def evaluate(model_path: str, suite: str = "libero_spatial", task_id: Optional[int] = None,
+             n_episodes: int = 50, stats_path: Optional[str] = None, horizon: int = 8, 
+             action_horizon: int = 8, img_size: int = 224, crop_ratio: float = 0.875, 
+             tile_images: bool = True):
     """Evaluate on LIBERO benchmark."""
     try:
         from libero.libero import benchmark, get_libero_path
@@ -406,15 +427,26 @@ def evaluate(model_path: str, suite: str = "libero_spatial", n_episodes: int = 5
     max_steps = MAX_STEPS.get(suite, 300)
     results = {}
 
-    print(f"\nEvaluating {suite}: {task_suite.n_tasks} tasks, {n_episodes} episodes each")
+    # Determine which tasks to evaluate
+    if task_id is not None:
+        if not (0 <= task_id < task_suite.n_tasks):
+            raise ValueError(f"task_id={task_id} out of range [0, {task_suite.n_tasks-1}]")
+        task_ids = [task_id]
+        print(f"\n{'='*60}")
+        print(f"SINGLE TASK EVALUATION MODE")
+        print(f"Evaluating suite={suite}, task_id={task_id}")
+        print(f"{'='*60}\n")
+    else:
+        task_ids = range(task_suite.n_tasks)
+        print(f"\nEvaluating {suite}: {task_suite.n_tasks} tasks, {n_episodes} episodes each")
 
-    for task_id in range(task_suite.n_tasks):
-        task = task_suite.get_task(task_id)
-        init_states = task_suite.get_task_init_states(task_id)
+    for tid in task_ids:
+        task = task_suite.get_task(tid)
+        init_states = task_suite.get_task_init_states(tid)
         instruction = task.language
         successes = []
 
-        print(f"\nTask {task_id}: {task.name[:50]}")
+        print(f"\nTask {tid}: {task.name[:50]}")
 
         for ep in tqdm(range(min(n_episodes, len(init_states))), desc="Episodes"):
             bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
@@ -445,12 +477,12 @@ def evaluate(model_path: str, suite: str = "libero_spatial", n_episodes: int = 5
         results[task.name] = rate
         print(f"  Success: {rate:.1f}%")
 
-    print(f"\n{'='*60}\nResults - {suite}\n{'='*60}")
+    print(f"\n{'='*60}\nResults - {suite}" + (f" (Task {task_id})" if task_id is not None else "") + f"\n{'='*60}")
     for name, rate in results.items():
         print(f"  {name[:45]:45s} {rate:5.1f}%")
     mean_rate = float(np.mean(list(results.values()))) if results else 0.0
     print(f"{'='*60}\nMean: {mean_rate:.1f}%")
-    return {"suite": suite, "n_episodes": int(n_episodes), "per_task_success": results, "mean_success": mean_rate}
+    return {"suite": suite, "task_id": task_id, "n_episodes": int(n_episodes), "per_task_success": results, "mean_success": mean_rate}
 
 
 # =============================================================================
@@ -470,6 +502,10 @@ class DataArguments:
     train_suite: Optional[str] = field(
         default=None,
         metadata={"help": "Train on a LIBERO suite only (e.g. libero_object). Requires `libero` installed."},
+    )
+    train_task_id: Optional[int] = field(
+        default=None,
+        metadata={"help": "Train on a single task ID from the suite (0-9 for libero_10). Requires train_suite."},
     )
     max_episodes: Optional[int] = field(
         default=None,
@@ -496,6 +532,10 @@ class EvalAfterTrainArguments:
     eval_suite: Optional[str] = field(
         default=None,
         metadata={"help": "Suite to evaluate after training (default: train_suite if set, else libero_object)"},
+    )
+    eval_task_id: Optional[int] = field(
+        default=None,
+        metadata={"help": "Evaluate on single task ID (default: same as train_task_id if set)"},
     )
     eval_n_episodes: int = field(default=5, metadata={"help": "Episodes per task for eval-after-train"})
     eval_action_horizon: int = field(default=8, metadata={"help": "action_horizon for eval-after-train"})
@@ -553,6 +593,7 @@ def train():
     dataset = LiberoDataset(
         repo_id=data_args.repo_id,
         train_suite=data_args.train_suite,
+        train_task_id=data_args.train_task_id,
         max_episodes=data_args.max_episodes,
         history=data_args.history,
         horizon=data_args.horizon,
@@ -591,12 +632,20 @@ def train():
 
     if eval_args.eval_after_train:
         suite = eval_args.eval_suite or data_args.train_suite or "libero_object"
+        
+        # If trained on single task, default to evaluating on same task
+        eval_task_id = eval_args.eval_task_id
+        if eval_task_id is None and data_args.train_task_id is not None:
+            eval_task_id = data_args.train_task_id
+            print(f"Auto-setting eval_task_id={eval_task_id} to match train_task_id")
+        
         final_dir = f"{training_args.output_dir}/final"
         stats_path = f"{training_args.output_dir}/dataset_stats.json"
-        print(f"Running eval-after-train: suite={suite}, episodes={eval_args.eval_n_episodes}")
+        print(f"Running eval-after-train: suite={suite}, task_id={eval_task_id}, episodes={eval_args.eval_n_episodes}")
         out = evaluate(
             final_dir,
             suite=suite,
+            task_id=eval_task_id,
             n_episodes=eval_args.eval_n_episodes,
             stats_path=stats_path if Path(stats_path).exists() else None,
             horizon=data_args.horizon,
@@ -614,12 +663,13 @@ def train():
             except Exception:
                 wandb = None
             if wandb is not None and getattr(wandb, "run", None) is not None:
+                task_suffix = f"_task{eval_task_id}" if eval_task_id is not None else ""
                 metrics = {
-                    f"eval/{suite}/mean_success": out["mean_success"],
-                    f"eval/{suite}/n_episodes": out["n_episodes"],
+                    f"eval/{suite}{task_suffix}/mean_success": out["mean_success"],
+                    f"eval/{suite}{task_suffix}/n_episodes": out["n_episodes"],
                 }
                 for task_name, rate in out["per_task_success"].items():
-                    metrics[f"eval/{suite}/task/{task_name}"] = float(rate)
+                    metrics[f"eval/{suite}{task_suffix}/task/{task_name}"] = float(rate)
                 wandb.log(metrics)
 
 
@@ -632,11 +682,12 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("--eval", type=str, required=True)
         parser.add_argument("--suite", type=str, default="libero_spatial")
+        parser.add_argument("--task_id", type=int, default=None)
         parser.add_argument("--n_episodes", type=int, default=50)
         parser.add_argument("--stats_path", type=str, default=None)
         parser.add_argument("--horizon", type=int, default=8)
         parser.add_argument("--action_horizon", type=int, default=8)
         args = parser.parse_args()
-        evaluate(args.eval, args.suite, args.n_episodes, args.stats_path, args.horizon, args.action_horizon)
+        evaluate(args.eval, args.suite, args.task_id, args.n_episodes, args.stats_path, args.horizon, args.action_horizon)
     else:
         train()
