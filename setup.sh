@@ -31,6 +31,7 @@ if [ -z "$CUDA_HOME" ]; then
 fi
 uv pip install setuptools wheel
 uv pip install flash-attn --no-build-isolation
+uv pip install -e '.[lora]'
 
 # Install TinyVLA with eval + LeRobot dependencies
 echo "Installing TinyVLA..."
