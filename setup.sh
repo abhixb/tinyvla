@@ -14,7 +14,7 @@ fi
 
 # Create venv and install
 echo "Creating environment..."
-uv venv .venv --python 3.11
+uv venv .venv --python 3.11 --clear
 source .venv/bin/activate
 
 # Install PyTorch with CUDA 12.4 (optimal for H100)
@@ -23,6 +23,13 @@ uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu
 
 # Install flash-attn (H100 has great support)
 echo "Installing Flash Attention..."
+if [ -z "$CUDA_HOME" ]; then
+    echo "Error: CUDA_HOME environment variable is not set."
+    echo "Please install the CUDA Toolkit and set CUDA_HOME to your CUDA installation directory."
+    echo "You can download the CUDA Toolkit from: https://developer.nvidia.com/cuda-downloads"
+    exit 1
+fi
+uv pip install setuptools wheel
 uv pip install flash-attn --no-build-isolation
 
 # Install TinyVLA with eval + LeRobot dependencies
