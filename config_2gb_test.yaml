@@ -1,0 +1,66 @@
+# ==========================================
+# Test Config with Qwen2.5-VL-2B (~4-5 GB VRAM)
+# ==========================================
+#
+# NOTE: Qwen doesn't have a 500M vision model.
+# This uses the smallest available: 2B (4x smaller than 3B)
+#
+# Expected VRAM: 4-5 GB
+# Similar memory footprint to SimVLA's 500M approach
+
+# === Model ===
+model_id: "Qwen/Qwen2.5-VL-2B-Instruct"  # Smallest Qwen VL model
+use_flash_attention: true
+use_quantization: "4bit"  # Further reduce from 2B
+
+# === LoRA ===
+use_lora: true
+lora_r: 8  # Minimal for testing
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: "q_proj,k_proj,v_proj,o_proj"  # Fewer modules for testing
+
+# === Data ===
+repo_id: "physical-intelligence/libero"
+train_suite: "libero_10"
+train_task_id: 0  # Single task
+history: 1
+horizon: 8
+img_size: 196
+crop_ratio: 0.875
+tile_images: true
+
+# === Augmentation ===
+brightness_aug: 0.2
+contrast_aug: 0.2
+saturation_aug: 0.2
+hue_aug: 0.05
+action_mask_aug_pct: 0.4
+
+# === Training ===
+output_dir: "./runs/vla0_2b_test"
+num_train_epochs: 5  # Quick test
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
+gradient_checkpointing: true
+optim: "adamw_bnb_8bit"
+learning_rate: 3.0e-5  # Higher for smaller model
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.05
+weight_decay: 0.01
+max_grad_norm: 1.0
+logging_steps: 5
+save_steps: 100
+save_total_limit: 2
+bf16: true
+dataloader_num_workers: 4
+remove_unused_columns: false
+report_to: ["wandb"]
+run_name: "vla0-2b-test"
+seed: 42
+
+# === Evaluation ===
+eval_after_train: true
+eval_suite: "libero_10"
+eval_n_episodes: 20  # Quick eval
+eval_action_horizon: 8

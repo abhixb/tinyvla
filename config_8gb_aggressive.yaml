@@ -1,0 +1,71 @@
+# ==========================================
+# Ultra Memory-Optimized Config for <8GB VRAM
+# ==========================================
+#
+# This config targets <8GB VRAM (e.g., for testing on smaller GPUs)
+# Uses aggressive optimizations:
+# - 4-bit quantization
+# - 8-bit optimizer
+# - Very small LoRA rank
+# - Batch size 1
+# - Smaller images
+#
+# Expected peak VRAM: 6-7 GB
+# Trade-off: May need more epochs or higher LR for convergence
+
+# === Model ===
+model_id: "Qwen/Qwen2.5-VL-2B-Instruct"  # Use 2B instead of 3B
+use_flash_attention: true
+use_quantization: "4bit"
+
+# === LoRA ===
+use_lora: true
+lora_r: 8  # Minimal rank (fewer trainable params)
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: "q_proj,k_proj,v_proj,o_proj"  # Only attention (not MLP)
+
+# === Data ===
+repo_id: "physical-intelligence/libero"
+train_suite: "libero_10"
+train_task_id: 0
+history: 1
+horizon: 8
+img_size: 128  # Very small images
+crop_ratio: 0.875
+tile_images: true
+
+# === Augmentation ===
+brightness_aug: 0.2
+contrast_aug: 0.2
+saturation_aug: 0.2
+hue_aug: 0.05
+action_mask_aug_pct: 0.4
+
+# === Training ===
+output_dir: "./runs/vla0_8gb"
+num_train_epochs: 15  # More epochs to compensate for smaller model
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 32  # Large accumulation
+gradient_checkpointing: true
+optim: "adamw_bnb_8bit"
+learning_rate: 3.0e-5  # Higher LR for smaller LoRA rank
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.05
+weight_decay: 0.01
+max_grad_norm: 1.0
+logging_steps: 5
+save_steps: 100
+save_total_limit: 2
+bf16: true
+dataloader_num_workers: 2  # Fewer workers to save CPU memory
+remove_unused_columns: false
+report_to: ["wandb"]
+run_name: "vla0-8gb-aggressive"
+seed: 42
+
+# === Evaluation ===
+eval_after_train: true
+eval_suite: "libero_10"
+eval_n_episodes: 50
+eval_action_horizon: 8

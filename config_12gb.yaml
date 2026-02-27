@@ -1,0 +1,69 @@
+# ==========================================
+# Memory-Optimized Config for RTX 4070 12GB
+# ==========================================
+#
+# This config targets <12GB VRAM by using:
+# - 4-bit quantization (saves ~4.5GB)
+# - 8-bit optimizer (saves ~0.2GB with LoRA)
+# - LoRA fine-tuning (already enabled, saves ~20GB)
+# - Gradient checkpointing (saves ~40-60% activations)
+# - Small batch size with gradient accumulation
+#
+# Expected peak VRAM: 7-9 GB
+
+# === Model ===
+model_id: "Qwen/Qwen2.5-VL-3B-Instruct"
+use_flash_attention: true
+use_quantization: "4bit"  # NEW: 4-bit quantization for model weights
+
+# === LoRA (Parameter-Efficient Fine-Tuning) ===
+use_lora: true
+lora_r: 16  # Reduced from 32 to save memory (fewer trainable params)
+lora_alpha: 32  # Reduced from 64
+lora_dropout: 0.05
+lora_target_modules: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+
+# === Data ===
+repo_id: "physical-intelligence/libero"
+train_suite: "libero_10"
+train_task_id: 0  # Single task training (0-9)
+history: 1
+horizon: 8
+img_size: 196  # Smaller images = less activation memory
+crop_ratio: 0.875
+tile_images: true
+
+# === Augmentation ===
+brightness_aug: 0.2
+contrast_aug: 0.2
+saturation_aug: 0.2
+hue_aug: 0.05
+action_mask_aug_pct: 0.4
+
+# === Training ===
+output_dir: "./runs/vla0_12gb"
+num_train_epochs: 10
+per_device_train_batch_size: 1  # Reduced from 2 to minimize activation memory
+gradient_accumulation_steps: 16  # Increased from 8 to maintain effective batch size
+gradient_checkpointing: true  # Trade compute for memory (~40% activation savings)
+optim: "adamw_bnb_8bit"  # NEW: 8-bit optimizer (saves ~50% optimizer memory)
+learning_rate: 2.0e-5
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.03
+weight_decay: 0.01
+max_grad_norm: 1.0
+logging_steps: 5
+save_steps: 100
+save_total_limit: 3
+bf16: true  # Mixed precision training
+dataloader_num_workers: 4
+remove_unused_columns: false
+report_to: ["wandb"]
+run_name: "vla0-12gb-optimized"
+seed: 42
+
+# === Evaluation ===
+eval_after_train: true
+eval_suite: "libero_10"
+eval_n_episodes: 50
+eval_action_horizon: 8
